@@ -4,11 +4,34 @@
 
 import type { ItemId } from './items';
 
-// World (v1 prototype world; the 256x256-tile persistent world arrives
-// in Phase 1 and will replace these dimensions)
-export const WORLD_W = 1600;
-export const WORLD_H = 1200;
+// World (Phase 1: 256x256-tile persistent world — TILE 32 px, chunk 16x16)
+// The v1 prototype world (1600x1200) is replaced by the tile map; all
+// positions, clamps and node layout below scale to MAP_PX automatically.
+export const TILE_SIZE = 32; // px per tile
+export const MAP_TILES = 256; // tiles per side
+export const CHUNK_TILES = 16; // tiles per chunk side
+export const CHUNKS_PER_SIDE = MAP_TILES / CHUNK_TILES; // 16
+export const MAP_PX = MAP_TILES * TILE_SIZE; // 8192 px per side
+export const WORLD_W = MAP_PX;
+export const WORLD_H = MAP_PX;
 export const WORLD_SEED = 1337;
+
+// Terrain kinds (map data — client renders them, server simulates on them).
+// Stored in the terrain grid as small codes (Uint8Array).
+export type TerrainKind = 'grass' | 'forest' | 'rock' | 'water';
+export const TERRAIN_CODE: Record<TerrainKind, number> = {
+  grass: 0,
+  forest: 1,
+  rock: 2,
+  water: 3,
+};
+export const TERRAIN_FROM_CODE: TerrainKind[] = ['grass', 'forest', 'rock', 'water'];
+export const TERRAIN_WALKABLE: Record<TerrainKind, boolean> = {
+  grass: true,
+  forest: true,
+  rock: true,
+  water: false,
+};
 
 // Player
 export const PLAYER_R = 18;
@@ -43,7 +66,10 @@ export const NODE_SEED = 1337;
 export const NODE_MARGIN = 90; // px from the world edge
 export const NODE_MIN_DIST = 100; // px between nodes
 export const NODE_CENTER_MIN_DIST = 200; // px from the world centre
-export const NODE_COUNTS = { tree: 10, rock: 8, bush: 6 } as const;
+// Resource nodes — counts scaled from the v1 density (24 nodes on
+// 1600x1200) to the 8192x8192 Phase 1 world, so ~2-3 nodes stay visible
+// per screen like the prototype. Density is a Phase 3 concern (DB nodes).
+export const NODE_COUNTS = { tree: 220, rock: 170, bush: 130 } as const;
 export const NODE_HP = { tree: 3, rock: 4, bush: 2 } as const;
 export const NODE_YIELD: Record<keyof typeof NODE_HP, ItemId> = {
   tree: 'wood',

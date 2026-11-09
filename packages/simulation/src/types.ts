@@ -6,8 +6,10 @@
 export interface World {
   /** World-generation seed (deterministic layout). */
   seed: number;
-  width: number;
-  height: number;
+  /** Tiles per side (the map is square: tiles x tiles). */
+  tiles: number;
+  /** Terrain grid, row-major Uint8Array of TERRAIN_CODE values. */
+  terrain: Uint8Array;
   /** Simulation tick counter. Advances by 1 per server tick (20/s). */
   tick: number;
 }

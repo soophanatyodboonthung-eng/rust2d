@@ -13,6 +13,11 @@ apps/mobile/android/
 apps/mobile/.expo/
 apps/mobile/web-build/
 
+# Generated pixel-art atlas (built by tools/atlas/generate-atlas.py,
+# also in CI before prebuild) — source is tools/atlas/sprites.json
+apps/mobile/assets/sprites/atlas.png
+apps/mobile/assets/sprites/atlas.json
+
 # env / secrets
 .env
 .env.local

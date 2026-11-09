@@ -1,4 +1,7 @@
 {
+  "dependencies": {
+    "@rust2d/shared": "workspace:*"
+  },
   "description": "Pure game simulation for Rust2D Online. No I/O, no React, no Node APIs — pure TypeScript only.",
   "devDependencies": {
     "typescript": "catalog:",

@@ -66,7 +66,7 @@ describe('world constants', () => {
       expect(ITEMS[NODE_YIELD[kind] as ItemId]).toBeDefined();
     }
     const total = Object.values(NODE_COUNTS).reduce((a, b) => a + b, 0);
-    expect(total).toBe(24); // 10 trees + 8 rocks + 6 bushes
+    expect(total).toBe(520); // 220 trees + 170 rocks + 130 bushes (Phase 1 density)
   });
 });
 

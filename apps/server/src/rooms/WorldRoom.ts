@@ -4,7 +4,7 @@
 
 import { Client, Room } from '@colyseus/core';
 
-import { TICK_MS, WORLD_H, WORLD_SEED, WORLD_W, WorldState } from '@rust2d/shared';
+import { TICK_MS, WORLD_SEED, WorldState } from '@rust2d/shared';
 import { advanceTick, createWorld } from '@rust2d/simulation';
 
 // Colyseus 0.18 types rooms by their options, not by state directly:
@@ -14,7 +14,7 @@ import { advanceTick, createWorld } from '@rust2d/simulation';
 export class WorldRoom extends Room<{ state: WorldState }> {
   maxClients = 20;
 
-  private simWorld = createWorld(WORLD_SEED, WORLD_W, WORLD_H);
+  private simWorld = createWorld(WORLD_SEED);
 
   onCreate() {
     this.setState(new WorldState());
