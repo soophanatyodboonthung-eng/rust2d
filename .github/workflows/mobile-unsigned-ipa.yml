@@ -1,0 +1,202 @@
+# Build unsigned iOS IPA — Rust2D Online (com.baka.expo2dskiatest)
+#
+# Purpose: build a DEVICE .ipa without a Mac, without a paid Apple
+# Developer account, and without EAS / Expo login.
+# The output is UNSIGNED on purpose — SideStore / AltStore / Sideloadly
+# sign it with a free Apple ID at install time (7-day expiry, 3-app limit),
+# or drop it into LiveContainer to run it inside its JIT container.
+#
+# How to run:
+#   1. Push this repo to GitHub.
+#   2. GitHub -> Actions -> "Build unsigned iOS IPA" -> Run workflow.
+#   3. Download the `rust2d-unsigned-ipa` artifact (expires in 14 days).
+#   4. Install with SideStore, or open it in LiveContainer.
+#
+# What it does NOT need: EXPO_TOKEN, Apple ID / password, .p12, .mobileprovision.
+# What it does NOT produce: a simulator .app, or a signed / App Store .ipa.
+#   -sdk iphoneos + generic/platform=iOS = device arm64, NOT simulator.
+#   CODE_SIGNING_ALLOWED=NO = no signing step at all.
+#
+# Runner: macos-26-intel (the arm64 macos-26 pool is capacity-constrained
+# and routinely fails to acquire a runner; Intel picks up immediately and
+# still outputs arm64 via ONLY_ACTIVE_ARCH=NO).
+#
+# NOTE on app icons: the Expo template PNGs in apps/mobile/assets/ are
+# binary files and cannot be pushed through the GitHub connector (UTF-8
+# snapshots only), so they are NOT in this repo. The workflow generates
+# simple solid-colour placeholder PNGs on the runner before prebuild,
+# only for files that are missing — real icons added later are kept as-is.
+# Prebuild fails without assets/icon.png, so this step must stay.
+#   Node 22, Xcode 26.4+, iOS 16.4, React Native 0.88, pnpm 10.
+# Based on adro0303/ipa-builder (MIT): expo prebuild + pod install +
+# xcodebuild with code signing disabled + Payload zip.
+
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-unsigned-ipa:
+    name: Build unsigned IPA (device, no signing)
+    runs-on: macos-26-intel
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Select latest Xcode (SDK 58 needs Xcode 26.4+)
+        run: |
+          ls /Applications | grep -i Xcode || true
+          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
+          echo "Using $LATEST"
+          sudo xcode-select -s "$LATEST"
+          xcodebuild -version
+          xcrun --find codesign
+
+      - name: Install JS dependencies (reproducible)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --filter @rust2d/mobile typecheck
+
+      - name: Generate placeholder app icons if missing
+        # assets/*.png are binary and not in the repo (see header note).
+        # Pure-stdlib PNG writer, no extra dependencies.
+        working-directory: apps/mobile
+        run: |
+          python3 - <<'PY'
+          import os, struct, zlib
+          def png(path, w, h, rgb):
+              def chunk(typ, data):
+                  c = struct.pack('>I', len(data)) + typ + data
+                  return c + struct.pack('>I', zlib.crc32(typ + data) & 0xffffffff)
+              ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
+              row = b'\x00' + bytes(rgb) * w
+              idat = zlib.compress(row * h, 9)
+              with open(path, 'wb') as f:
+                  f.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) + chunk(b'IDAT', idat) + chunk(b'IEND', b''))
+          os.makedirs('assets', exist_ok=True)
+          specs = {
+              'assets/icon.png': (1024, 1024, (15, 23, 42)),
+              'assets/splash-icon.png': (1024, 1024, (15, 23, 42)),
+              'assets/favicon.png': (48, 48, (15, 23, 42)),
+              'assets/android-icon-background.png': (512, 512, (15, 23, 42)),
+              'assets/android-icon-foreground.png': (512, 512, (34, 197, 94)),
+              'assets/android-icon-monochrome.png': (432, 432, (15, 23, 42)),
+          }
+          for path, (w, h, rgb) in specs.items():
+              if not os.path.exists(path):
+                  png(path, w, h, rgb)
+                  print(f'generated {path} {w}x{h}')
+              else:
+                  print(f'kept existing {path}')
+          PY
+          ls -lh assets/
+
+      - name: Prebuild native iOS project
+        # --clean regenerates ios/ from app.json (bundle id
+        # com.baka.expo2dskiatest). ios/ is gitignored on purpose.
+        # No --non-interactive flag: Expo CLI no longer supports it,
+        # GitHub Actions already sets CI=1 so prebuild will not prompt.
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods dependencies
+        working-directory: apps/mobile/ios
+        run: pod install
+
+      - name: Find workspace and scheme
+        id: scheme
+        working-directory: apps/mobile
+        run: |
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -n1)
+          PROJECT=$(ls -d ios/*.xcodeproj | head -n1)
+          SCHEME=$(basename "$PROJECT" .xcodeproj)
+          echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Workspace: $WORKSPACE / Scheme: $SCHEME"
+          xcodebuild -list -workspace "$WORKSPACE"
+
+      - name: Build unsigned (device, Release)
+        working-directory: apps/mobile
+        run: |
+          xcodebuild \
+            -workspace "${{ steps.scheme.outputs.workspace }}" \
+            -scheme "${{ steps.scheme.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            PROVISIONING_PROFILE="" \
+            DEVELOPMENT_TEAM="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Verify device arm64 and strip any residual signature
+        working-directory: apps/mobile
+        run: |
+          APP_PATH=$(find build/DerivedData/Build/Products -maxdepth 2 -name "*.app" -type d | head -n1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app bundle found in build products"
+            find build/DerivedData/Build/Products -maxdepth 3 || true
+            exit 1
+          fi
+          echo "app_path=$APP_PATH" >> "$GITHUB_ENV"
+          echo "Found app: $APP_PATH"
+          ls -lh "$APP_PATH"
+          # Main executable must be device arm64 (a simulator build would be
+          # x86_64 / simulator arm64 and would fail SideStore install).
+          EXEC_NAME=$(basename "$APP_PATH" .app)
+          echo "Main executable: $EXEC_NAME"
+          lipo -archs "$APP_PATH/$EXEC_NAME"
+          lipo -archs "$APP_PATH/$EXEC_NAME" | grep -q arm64 || { echo "::error::Main executable is not arm64"; exit 1; }
+          # Remove any residual signatures / provisioning profiles so the
+          # artifact is cleanly unsigned for SideStore to sign.
+          find "$APP_PATH" -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find "$APP_PATH" -name "embedded.mobileprovision" -delete 2>/dev/null || true
+          if codesign --verify --deep --strict "$APP_PATH" 2>/dev/null; then
+            echo "::warning::App still verifies as signed after stripping — check the log"
+          else
+            echo "Confirmed: app is unsigned (codesign --verify fails, as expected)"
+          fi
+
+      - name: Package unsigned IPA
+        working-directory: apps/mobile
+        run: |
+          mkdir -p build/Payload
+          cp -R "$app_path" build/Payload/
+          cd build
+          # -y preserves symlinks inside frameworks (Skia / Reanimated).
+          zip -r -y "rust2d-unsigned.ipa" Payload
+          shasum -a 256 "rust2d-unsigned.ipa" | tee "rust2d-unsigned.ipa.sha256"
+          ls -lh "rust2d-unsigned.ipa" "rust2d-unsigned.ipa.sha256"
+          unzip -l "rust2d-unsigned.ipa" | head -30
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust2d-unsigned-ipa
+          path: |
+            apps/mobile/build/rust2d-unsigned.ipa
+            apps/mobile/build/rust2d-unsigned.ipa.sha256
+          retention-days: 14
