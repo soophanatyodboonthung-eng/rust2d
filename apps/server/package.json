@@ -1,0 +1,28 @@
+{
+  "dependencies": {
+    "@colyseus/core": "0.18.27",
+    "@colyseus/ws-transport": "0.18.4",
+    "@rust2d/shared": "workspace:*",
+    "@rust2d/simulation": "workspace:*",
+    "zod": "catalog:"
+  },
+  "description": "Colyseus game server for Rust2D Online (server-authoritative, Node 22+).",
+  "devDependencies": {
+    "@colyseus/sdk": "0.18.9",
+    "@types/express": "5.0.6",
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "name": "@rust2d/server",
+  "private": true,
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

@@ -1,0 +1,26 @@
+{
+  "dependencies": {
+    "@colyseus/schema": "5.0.45"
+  },
+  "description": "Shared data, protocol types and Colyseus state schema for Rust2D Online. Data only — no game logic.",
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "default": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "name": "@rust2d/shared",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "types": "./src/index.ts",
+  "version": "0.1.0"
+}

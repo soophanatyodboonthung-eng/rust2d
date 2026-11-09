@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "target": "ES2022"
+  },
+  "extends": "../../packages/config/tsconfig.base.json",
+  "include": ["src", "tests"]
+}

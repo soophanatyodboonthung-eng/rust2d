@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+
+# Expo / React Native (generated native projects)
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+apps/mobile/web-build/
+
+# env / secrets
+.env
+.env.local
+*.pem
+*.p12
+*.mobileprovision
+
+# test / coverage
+coverage/
+.nyc_output/
+
+# OS / editor
+.DS_Store
+*.log

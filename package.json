@@ -1,0 +1,23 @@
+{
+  "description": "Rust2D Online — 2D top-down multiplayer survival (Rust-like). Expo client + Colyseus server-authoritative + PostgreSQL.",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "typescript-eslint": "8.72.2"
+  },
+  "name": "rust2d",
+  "packageManager": "pnpm@10.15.1",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @rust2d/server dev",
+    "dev:mobile": "pnpm --filter @rust2d/mobile start",
+    "dev:server": "pnpm --filter @rust2d/server dev",
+    "format": "prettier --write \"apps/server/**/*.{ts,json}\" \"packages/**/*.{ts,json}\" \"*.{json,md,yml}\" \".github/workflows/*.yml\" \"infra/*.yml\"",
+    "format:check": "prettier --check \"apps/server/**/*.{ts,json}\" \"packages/**/*.{ts,json}\" \"*.{json,md,yml}\" \".github/workflows/*.yml\" \"infra/*.yml\"",
+    "lint": "eslint apps/server packages/shared packages/simulation",
+    "test": "pnpm --filter @rust2d/server --filter @rust2d/shared --filter @rust2d/simulation -r exec vitest run",
+    "typecheck": "pnpm -r exec tsc --noEmit"
+  },
+  "version": "0.1.0"
+}

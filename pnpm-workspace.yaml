@@ -1,0 +1,19 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Allowlist for packages whose install scripts may run (pnpm blocks
+# postinstall scripts by default). esbuild validates its platform binary;
+# msgpackr-extract compiles the optional native msgpack addon for Colyseus.
+onlyBuiltDependencies:
+  - esbuild
+  - msgpackr-extract
+
+# Shared version catalog — single source of truth for cross-package tools.
+# All versions below are exact pins verified 2026-11-10.
+catalog:
+  typescript: 6.0.3
+  vitest: 5.1.0
+  tsx: 4.23.15
+  zod: 4.6.7
+  '@types/node': 24.19.2
