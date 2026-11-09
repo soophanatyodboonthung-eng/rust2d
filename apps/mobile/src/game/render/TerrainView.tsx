@@ -1,9 +1,17 @@
 // Terrain — the 256x256 tile map rendered as cached chunk surfaces.
 // Each 16x16-tile chunk is drawn once to a 512x512 offscreen surface
 // (from the atlas tiles) and blitted every frame; chunks outside the
-// camera are never built, and the cache is capped (LRU, 16 chunks ≈ 16 MB).
-// The visible chunk set changes only when the camera crosses a chunk
-// boundary, so this never re-renders inside the frame loop.
+// camera are never built. The visible chunk set changes only when the
+// camera crosses a chunk boundary, so this never re-renders inside the
+// frame loop.
+//
+// Crash safety (hotfix 2026-11-10): chunk images are NEVER disposed
+// while mounted — disposing an SkImage that the native view is still
+// drawing crashes the app (use-after-free). Eviction only drops our
+// cache-map reference; the rendered <Image> nodes hold their own
+// references while mounted, and the native image is freed when the last
+// reference drops. Builds are also staggered (a few chunks per run) so
+// a fast camera move never blocks the JS thread with a big burst.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Skia, type SkImage } from '@shopify/react-native-skia';
@@ -21,7 +29,8 @@ import {
 import type { AtlasImages } from './atlas';
 
 const CHUNK_PX = CHUNK_TILES * TILE_SIZE; // 512
-const MAX_CACHED_CHUNKS = 16;
+const MAX_CACHED_CHUNKS = 24; // ≈ 24 MB of chunk surfaces
+const MAX_BUILD_PER_RUN = 4;
 const VIEW_MARGIN_CHUNKS = 1;
 
 export interface ViewRect {
@@ -57,6 +66,8 @@ export function TerrainView({
   viewRect: ViewRect;
 }) {
   const [chunks, setChunks] = useState<ChunkRender[]>([]);
+  // Re-runs the build pass until every wanted chunk is cached.
+  const [buildTick, setBuildTick] = useState(0);
   const cacheRef = useRef(new Map<number, SkImage>());
   const lastKeysRef = useRef<string>('');
 
@@ -78,11 +89,22 @@ export function TerrainView({
         wanted.push(chunkIndex(cx, cy));
       }
     }
+    const wantedSet = new Set(wanted);
+    const ccx = (rect.cx0 + rect.cx1) / 2;
+    const ccy = (rect.cy0 + rect.cy1) / 2;
+    const dist2 = (key: number) => {
+      const cx = key % CHUNKS_PER_SIDE;
+      const cy = Math.floor(key / CHUNKS_PER_SIDE);
+      return (cx - ccx) ** 2 + (cy - ccy) ** 2;
+    };
 
-    // Build any chunk surface that is not cached yet.
+    // Build missing chunks — a few per run, nearest first, so a fast
+    // camera move never blocks the JS thread with a big burst. The
+    // buildTick chain re-runs this pass until everything wanted is built.
+    const missing = wanted.filter((k) => !cache.has(k)).sort((a, b) => dist2(a) - dist2(b));
     const paint = Skia.Paint();
-    for (const key of wanted) {
-      if (cache.has(key)) continue;
+    let built = 0;
+    for (const key of missing.slice(0, MAX_BUILD_PER_RUN)) {
       const cx = key % CHUNKS_PER_SIDE;
       const cy = Math.floor(key / CHUNKS_PER_SIDE);
       const surface = Skia.Surface.MakeOffscreen(CHUNK_PX, CHUNK_PX);
@@ -108,24 +130,20 @@ export function TerrainView({
       }
       const img = surface.makeImageSnapshot();
       surface.dispose();
-      if (img) cache.set(key, img);
+      if (img) {
+        cache.set(key, img);
+        built++;
+      }
     }
 
-    // Evict the farthest chunks when the cache is over the cap.
+    // Evict far chunks that are NOT wanted. Never dispose an image here
+    // (see the header note) — dropping the map reference is enough.
     if (cache.size > MAX_CACHED_CHUNKS) {
-      const ccx = (rect.cx0 + rect.cx1) / 2;
-      const ccy = (rect.cy0 + rect.cy1) / 2;
-      const entries = [...cache.entries()]
-        .map(([key, img]) => {
-          const cx = key % CHUNKS_PER_SIDE;
-          const cy = Math.floor(key / CHUNKS_PER_SIDE);
-          return { key, img, d: (cx - ccx) ** 2 + (cy - ccy) ** 2 };
-        })
-        .sort((a, b) => b.d - a.d);
-      for (const e of entries.slice(MAX_CACHED_CHUNKS)) {
-        e.img.dispose();
-        cache.delete(e.key);
-      }
+      const over = cache.size - MAX_CACHED_CHUNKS;
+      const evictable = [...cache.keys()]
+        .filter((key) => !wantedSet.has(key))
+        .sort((a, b) => dist2(b) - dist2(a));
+      for (const key of evictable.slice(0, over)) cache.delete(key);
     }
 
     const keys = wanted.filter((k) => cache.has(k));
@@ -141,7 +159,14 @@ export function TerrainView({
         })),
       );
     }
-  }, [rect, world, atlas]);
+
+    // Keep building until every wanted chunk is cached. The chain stops
+    // by itself: no bump when nothing was built (surface failure) or
+    // when nothing is missing anymore.
+    if (built > 0 && wanted.some((k) => !cache.has(k))) {
+      setBuildTick((t) => t + 1);
+    }
+  }, [rect, world, atlas, buildTick]);
 
   return (
     <>

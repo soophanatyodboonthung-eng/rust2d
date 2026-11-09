@@ -29,7 +29,15 @@ export interface TouchHandlers {
 
 export function GameCanvas({ state, touch }: { state: GameState; touch: TouchHandlers }) {
   const atlas = useAtlas();
-  const [viewRect, setViewRect] = useState<ViewRect>({ x: 0, y: 0, w: SCREEN_W, h: SCREEN_H });
+  // Start at the spawn (world centre) — the player spawns there, so the
+  // first render already shows the right chunks and nodes instead of the
+  // world corner (0, 0) until the first 4 Hz sync.
+  const [viewRect, setViewRect] = useState<ViewRect>(() => ({
+    x: Math.max(0, WORLD_W / 2 - SCREEN_W / 2),
+    y: Math.max(0, WORLD_H / 2 - SCREEN_H / 2),
+    w: SCREEN_W,
+    h: SCREEN_H,
+  }));
 
   // View-rect sync at 4 Hz (same cadence as the HUD) — only set when the
   // camera actually moved, so the chunk set / culled list stay stable.

@@ -30,23 +30,28 @@ export function useAtlas(): AtlasImages | null {
     if (!atlas) return;
     const out: AtlasImages = {};
     for (const [name, rect] of Object.entries(manifest.frames)) {
-      const surface = Skia.Surface.MakeOffscreen(rect.w, rect.h);
-      if (!surface) continue;
-      const canvas = surface.getCanvas();
-      canvas.drawImageRect(
-        atlas,
-        Skia.XYWHRect(rect.x, rect.y, rect.w, rect.h),
-        Skia.XYWHRect(0, 0, rect.w, rect.h),
-        Skia.Paint(),
-      );
-      const img = surface.makeImageSnapshot();
-      if (img) out[name] = img;
-      surface.dispose();
+      try {
+        const surface = Skia.Surface.MakeOffscreen(rect.w, rect.h);
+        if (!surface) continue;
+        const canvas = surface.getCanvas();
+        canvas.drawImageRect(
+          atlas,
+          Skia.XYWHRect(rect.x, rect.y, rect.w, rect.h),
+          Skia.XYWHRect(0, 0, rect.w, rect.h),
+          Skia.Paint(),
+        );
+        const img = surface.makeImageSnapshot();
+        // The surface is disposed here (the snapshot stays valid), but
+        // the snapshot itself is never disposed while mounted — see
+        // TerrainView: disposing a rendered image crashes the app.
+        surface.dispose();
+        if (img) out[name] = img;
+      } catch {
+        // One bad sprite must not break the whole atlas; the renderer
+        // falls back to vector shapes for the missing sprite.
+      }
     }
     setImages(out);
-    return () => {
-      for (const img of Object.values(out)) img.dispose();
-    };
   }, [atlas]);
 
   return images;
