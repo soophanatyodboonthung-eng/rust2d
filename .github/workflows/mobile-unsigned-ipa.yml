@@ -69,6 +69,11 @@ jobs:
       - name: Install JS dependencies (reproducible)
         run: pnpm install --frozen-lockfile
 
+      - name: Generate pixel-art atlas
+        # atlas.png/atlas.json are generated (gitignored) — the source is
+        # tools/atlas/sprites.json + the stdlib-only generator script.
+        run: python3 tools/atlas/generate-atlas.py
+
       - name: Typecheck mobile app
         run: pnpm --filter @rust2d/mobile typecheck
 
